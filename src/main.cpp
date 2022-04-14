@@ -1,31 +1,37 @@
 #include <Arduino.h>
 #include <IBMIOTF8266.h>
-
-// USER CODE EXAMPLE : Publish Interval. The periodic update is normally recommended.
-// And this can be a good example for the user code addition
+#include <ArduinoJson.h>
+#include <Adafruit_NeoPixel.h>
+#define LedPin 15
+#define LedNum 4
 String user_html = ""
-    "<p><input type='text' name='meta.pubInterval' placeholder='Publish Interval'>";
-// USER CODE EXAMPLE : command handling
+// USER CODE EXAMPLE : your custom config variable 
+// in meta.XXXXX, XXXXX should match to ArduinoJson index to access
+    "<p><input type='text' name='meta.yourVar' placeholder='Your Custom Config'>";
+                    ;
+// for meta.XXXXX, this var is the C variable to hold the XXXXX
+int             customVar1;
+// USER CODE EXAMPLE : your custom config variable
 
-char*               ssid_pfix = (char*)"IOTlux";
+char*               ssid_pfix = (char*)"IOTsmg";
 unsigned long       lastPublishMillis = - pubInterval;
-int val;
-char lux[8];
-char msg[8];
 
+
+int red =0;
+int green =0;
+int blue =0;
+Adafruit_NeoPixel pixels(LedNum,LedPin,NEO_GRB + NEO_KHZ800);
 void publishData() {
     StaticJsonDocument<512> root;
     JsonObject data = root.createNestedObject("d");
 
 // USER CODE EXAMPLE : command handling
-    val = analogRead(0);
-    dtostrf(val,5,1,lux);
-    sprintf(msg,"%s",lux);
-    data["lux"] = msg;
-    //client.publish(publishTopic,msg);
+    data["r"] = red;
+    data["g"] = green;
+    data["b"] = blue;
 // USER CODE EXAMPLE : command handling
 
-    serializeJson(root, msgBuffer);
+    serializeJson(root,msgBuffer);
     client.publish(publishTopic, msgBuffer);
 }
 
@@ -34,10 +40,17 @@ void handleUserCommand(JsonDocument* root) {
     
 // USER CODE EXAMPLE : status/change update
 // code if any of device status changes to notify the change
-    if(d.containsKey("lux")) {
-       
+    if(d.containsKey("color")) {
+      red = d["color"]["r"].as<int>();
+      green = d["color"]["g"].as<int>();
+      blue = d["color"]["b"].as<int>();
+      for(int i = 0; i < LedNum; i++) {
+        pixels.setPixelColor(i, pixels.Color(red, green, blue));
+      }
+      pixels.show();
+      }
         lastPublishMillis = - pubInterval;
-    }
+    
 // USER CODE EXAMPLE
 }
 
@@ -52,12 +65,13 @@ void message(char* topic, byte* payload, unsigned int payloadLength) {
     }
 
     handleIOTCommand(topic, &root);
-    if (!strcmp(updateTopic, topic)) {
+    if (!strncmp(updateTopic, topic, cmdBaseLen)) {
 // USER CODE EXAMPLE : meta data update
 // If any meta data updated on the Internet, it can be stored to local variable to use for the logic
-        pubInterval = cfg["meta"]["pubInterval"];
+// in cfg["meta"]["XXXXX"], XXXXX should match to one in the user_html
+        customVar1 = cfg["meta"]["yourVar"];
 // USER CODE EXAMPLE
-    } else if (!strncmp(commandTopic, topic, 10)) {            // strcmp return 0 if both string matches
+    } else if (!strncmp(commandTopic, topic, cmdBaseLen)) {            // strcmp return 0 if both string matches
         handleUserCommand(&root);
     }
 }
@@ -65,7 +79,8 @@ void message(char* topic, byte* payload, unsigned int payloadLength) {
 void setup() {
     Serial.begin(115200);
 // USER CODE EXAMPLE : meta data update
-    
+    pixels.begin();
+    pixels.clear();
 // USER CODE EXAMPLE
 
     initDevice();
